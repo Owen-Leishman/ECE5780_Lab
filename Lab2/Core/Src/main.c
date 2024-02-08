@@ -62,7 +62,7 @@ int main(void)
 	NVIC_EnableIRQ(EXTI0_1_IRQn); // Enable the EXTI interrupt for lines 0 and 1
 	
 	NVIC_SetPriority(EXTI0_1_IRQn, 1); // Set the interrupt priority for EXTI interrupt lines 0 and 1
-	//NVIC_SetPriority(SysTick_IRQn, 2); // Set the interrupt priority for the SysTick interrupt
+	NVIC_SetPriority(SysTick_IRQn, 2); // Set the interrupt priority for the SysTick interrupt
 	
   while (1)
   {
@@ -89,13 +89,13 @@ void EXTI0_1_IRQHandler(void){
 	GPIOC->ODR ^= (0b1 << ORANGE);
 	
 	// Delay loop
-	//for(uint32_t count = 0; count < 15000000; count ++){
-	//	__NOP(); // NOP so the compiler doesn't optimize away the loop
-	//}
+	for(uint32_t count = 0; count < 15000000; count ++){
+		__NOP(); // NOP so the compiler doesn't optimize away the loop
+	}
 	
 	// Toggle the Green and Orange LEDs
-	//GPIOC->ODR ^= (0b1 << GREEN);
-	//GPIOC->ODR ^= (0b1 << ORANGE);
+	GPIOC->ODR ^= (0b1 << GREEN);
+	GPIOC->ODR ^= (0b1 << ORANGE);
 
 	EXTI->PR |= 0b1; // Clear the flag to acknowledge the interupt
 	
