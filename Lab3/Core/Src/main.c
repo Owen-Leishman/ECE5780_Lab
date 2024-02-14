@@ -49,14 +49,29 @@ int main(void)
 	RCC->APB1ENR |= 0b1; 			// Enable TIM2
 	//RCC->APB1ENR |= 0b1 << 1; // Enable TIM3
 	
-	TIM2->PSC = 39999; // Set the prescaler to 4000 so the timer frequency is 200Hz
-	TIM2->ARR = 50;    // 200Hz / 50 = 4Hz
+	TIM2->PSC = 50; // Set the prescaler to 50 so the timer frequency is 160,000Hz
+	TIM2->ARR = 200;    // 160,000Hz / 200 = 800Hz
 	
-	TIM2->DIER |= 0b1; // Enables update interupt UIE
+	//TIM2->DIER |= 0b1; // Enables update interupt UIE
 	
-	NVIC_EnableIRQ(TIM2_IRQn);
+	//NVIC_EnableIRQ(TIM2_IRQn);
 	
-	TIM2->CR1 |= 0b1;  // Enable the clock
+	//TIM2->CR1 |= 0b1;  // Enable the clock
+	
+	TIM2->CCMR1 &= ~(0b11 ); 			// Set CC2S to output
+	TIM2->CCMR1 &= ~(0b11 << 8); 	// Set CC2S to output
+	
+	TIM2->CCMR1 |= 0b110 << 12;		// Set OC2M to output PWM mode 1
+	TIM2->CCMR1 |= 0b111 << 4; 		// Set OC1M to output PWM mode 2
+
+	TIM2->CCMR1 |= 0b1   << 3;		// Enable output compare preload channel 1
+	TIM2->CCMR1 |= 0b1   << 11;   // Enable output compare preload channel 2
+	
+	TIM2->CCER |= 0b1; 			// Enable output for channel 1
+	TIM2->CCER |= 0b1 << 4; // Enable output for channel 2
+	
+	TIM2->CCR1 = 200/5;
+	TIM2->CCR2 = 200/5;
 	
 	
   while (1)
