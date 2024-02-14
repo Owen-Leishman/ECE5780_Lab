@@ -44,13 +44,13 @@ int main(void)
   SystemClock_Config();
 
 	GPIOInit();
-	GPIOC->ODR |= (0b1 << GREEN); // Start with the green LED on
+	//GPIOC->ODR |= (0b1 << GREEN); // Start with the green LED on
 	
-	RCC->APB1ENR |= 0b1; 			// Enable TIM2
+	RCC->APB1ENR |= 0b1 << 1; 			// Enable TIM3
 	//RCC->APB1ENR |= 0b1 << 1; // Enable TIM3
 	
-	TIM2->PSC = 50; // Set the prescaler to 50 so the timer frequency is 160,000Hz
-	TIM2->ARR = 200;    // 160,000Hz / 200 = 800Hz
+	TIM3->PSC = 50; // Set the prescaler to 50 so the timer frequency is 160,000Hz
+	TIM3->ARR = 200;    // 160,000Hz / 200 = 800Hz
 	
 	//TIM2->DIER |= 0b1; // Enables update interupt UIE
 	
@@ -58,20 +58,22 @@ int main(void)
 	
 	//TIM2->CR1 |= 0b1;  // Enable the clock
 	
-	TIM2->CCMR1 &= ~(0b11 ); 			// Set CC2S to output
-	TIM2->CCMR1 &= ~(0b11 << 8); 	// Set CC2S to output
+	TIM3->CCMR1 &= ~(0b11 ); 			// Set CC2S to output
+	TIM3->CCMR1 &= ~(0b11 << 8); 	// Set CC2S to output
 	
-	TIM2->CCMR1 |= 0b110 << 12;		// Set OC2M to output PWM mode 1
-	TIM2->CCMR1 |= 0b111 << 4; 		// Set OC1M to output PWM mode 2
+	TIM3->CCMR1 |= 0b110 << 12;		// Set OC2M to output PWM mode 1
+	TIM3->CCMR1 |= 0b111 << 4; 		// Set OC1M to output PWM mode 2
 
-	TIM2->CCMR1 |= 0b1   << 3;		// Enable output compare preload channel 1
-	TIM2->CCMR1 |= 0b1   << 11;   // Enable output compare preload channel 2
+	TIM3->CCMR1 |= 0b1   << 3;		// Enable output compare preload channel 1
+	TIM3->CCMR1 |= 0b1   << 11;   // Enable output compare preload channel 2
 	
-	TIM2->CCER |= 0b1; 			// Enable output for channel 1
-	TIM2->CCER |= 0b1 << 4; // Enable output for channel 2
+	TIM3->CCER |= 0b1; 			// Enable output for channel 1
+	TIM3->CCER |= 0b1 << 4; // Enable output for channel 2
 	
-	TIM2->CCR1 = 200/5;
-	TIM2->CCR2 = 200/5;
+	TIM3->CCR1 = 40;
+	TIM3->CCR2 = 40;
+	
+	TIM3->CR1 |= 0b1;  // Enable the clock
 	
 	
   while (1)
@@ -110,32 +112,26 @@ void GPIOInit(void){
 	//Enable the peripheral clock for GPIO port C
 	RCC->AHBENR |= 0b1<<19; 
 	
-	//Enable the peripheral clock for GPIO port A
-	RCC->AHBENR |= 0b1<<17;
-	
 	// Set PC6, PC7, PC8, PC9 to general purpose output
-	GPIOC->MODER |= 0b01 << (6 * 2);
-	GPIOC->MODER |= 0b01 << (7 * 2);
-	GPIOC->MODER |= 0b01 << (8 * 2);
-	GPIOC->MODER |= 0b01 << (9 * 2);
+	GPIOC->MODER |= 0b10 << (6 * 2); // Set to alternate function
+	GPIOC->MODER |= 0b10 << (7 * 2); // Set to alternate function
+
 	
-	// Set PA0 to general purpose input
-	GPIOA->MODER &= ~(0b11);
+	GPIOC->AFR[0] &= ~(0b1111 << 24); // Set PC6 alternate function to AF0
+	GPIOC->AFR[0] &= ~(0b1111 << 28); // Set PC7 alternate function to AF0
+	
 	
 	// Set the output type to push pull for GPIO port c
 	GPIOC->OTYPER  = 0x00000000;
 	
 	// Set the speed to slow for GPIO port c
 	GPIOC->OSPEEDR = 0x00000000; 
-	
-	// Set the speed to slow for GPIO PA0
-	GPIOA->OSPEEDR &= ~(0b11); 	
+		
 	
 	// Set the pullup and pulldown to off for GPIO port c
 	GPIOC->PUPDR = 0x00000000; 
 
-	// Set PA0 to pulldown
-	GPIOA->PUPDR |= 0b10;
+
 	
 }
 
