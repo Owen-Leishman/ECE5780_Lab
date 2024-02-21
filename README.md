@@ -3,3 +3,8 @@
 - [Lab 1](/Lab1/Core/Src/main.c)
   - Part 1: Blink an Led
   - Part 2: Toggle an Led using a button
+- [Lab 2](/Lab2/Core/Src/main.c)
+  - Part 1: Setting up interupts to toggle LEDS
+  - Part 2: Starving an interupt
+  - Button to interupt delay is 71.8uS
+  - ![alt text](/Lab2/Pictures/EXTI0_delay_measurement.png)
