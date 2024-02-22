@@ -19,6 +19,8 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
+#define LAB_PART 2 // Choose which part of the lab to run (part 1 or 2)
+
 #define BAUD_RATE 115200
 
 #define RED 		6
@@ -33,6 +35,14 @@ void GPIOInit(void);
 void LEDTogle(uint16_t LED);
 void USARTTransmitBlocking(uint8_t data);
 void USARTTransmitBlockingString(uint8_t *data);
+void USART3_4_IRQHandler(void);
+void LABPart1(void);
+void LABPart2(void);
+void LEDSet(uint16_t LED, uint8_t value);
+
+// Global interupt variables
+volatile uint8_t interrupt_data;
+volatile uint8_t interrupt_status;
 
 /**
   * @brief  The application entry point.
@@ -68,20 +78,249 @@ int main(void)
 	GPIOB->OTYPER  = 0x00000000;
 	
 	uint32_t baud_divider = HAL_RCC_GetHCLKFreq()/BAUD_RATE; // Calculate baud rate
-	//uint32_t baud_divider = HAL_RCC_GetSysClockFreq()/BAUD_RATE;
 	
 	USART3->BRR = baud_divider; // Set Baud rate
 	
+	USART3->CR1 |= 0b1<<5; // Enable USART3 recieve not empty interrupt
 	USART3->CR1 |= 0b1<<3; // Enable USART3 transmit
 	USART3->CR1 |= 0b1<<2; // Enable USART3 receiver
 	USART3->CR1 |= 0b1;		 // Enable USART3
 
+	if(LAB_PART == 1){
+		LABPart1();
+	}
+	if(LAB_PART == 2){
+		LABPart2();
+	}
+}
+
+/**
+  * @brief Transmits a single character over USART3
+  * @retval None
+* @param data: the data to be transmitted
+  */
+void USARTTransmitBlocking(uint8_t data){
+
+	while((USART3->ISR & (0b1<<7)) == 0){
+		__NOP();
+	}
 	
+	USART3->TDR = data;
+	
+}
+
+/**
+  * @brief Transmits a array over uart
+  * @retval None
+  * @param *data: pointer to null terminated array to transmit
+  */
+void USARTTransmitBlockingString(uint8_t *data){
+
+	for(uint16_t i = 0; data[i] != 0; i++){
+		USARTTransmitBlocking(data[i]);
+	} 
+	
+}
+
+/**
+  * @brief Reads data from USART3 when interrupt is turned on
+  * @retval None
+  */
+void USART3_4_IRQHandler(void){
+	interrupt_data = USART3->RDR;
+	interrupt_status = 1;
+}
+
+
+void LABPart2(void){
+	NVIC_EnableIRQ(USART3_4_IRQn);
+	NVIC_SetPriority(USART3_4_IRQn, 1);
+
+
+	// Messages to transmit over USART
+	uint8_t startMessage[] = "\r\nPlease enter a command:\r\n";
+	uint8_t redMessage[] = "Red LED";
+	uint8_t blueMessage[] = "Blue LED";
+	uint8_t greenMessage[] = "Green LED";
+	uint8_t orangeMessage[] = "Orange LED";
+	
+	uint8_t onMessage[] = " turned on.\r\n";
+	uint8_t offMessage[] = " turned off.\r\n";
+	uint8_t togleMessage[] = " toggled.\r\n";
+
+	uint8_t errorMessage[] = "\033[1;31mERROR \033[mUnrecognized command, try '-h' for help\r\n";
+
+	uint8_t helpMessage[] = "LED Control software\r\n\n\tcommand format: [LED COLOR][LED COMMAND]\r\n\n\tLED COLOR:\r\n\t\tr - RED\r\n\t\tg - GREEN\r\n\t\tb - BLUE\r\n\t\to - ORANGE\r\n\n\tLED COMMAND\r\n\t\t0 - turn LED off\r\n\t\t1 - turn LED on\r\n\t\t2 - toggle LED";
+
+	// Program state variables
+	uint8_t lastRead = 0;
+	uint8_t start = 0;
+
+  while (1)
+  {
+		
+		// If the start message has not been printed, print the start message
+		if(start == 0){
+			USARTTransmitBlockingString(startMessage);
+			start = 1;
+		}
+		
+		// If an interrupt has happened interpret the data
+		if(interrupt_status){
+			
+			// If this is the first value read store it
+			if(lastRead == 0){
+				
+				lastRead = interrupt_data;
+				interrupt_status = 0;
+				
+			// If this is the second value read run the command	
+			}else{
+				
+				// Interpret the command
+				switch(lastRead){
+					case 'r':
+						switch(interrupt_data){
+							case '0':
+								LEDSet(RED, 0);
+								USARTTransmitBlockingString(redMessage);
+								USARTTransmitBlockingString(offMessage);
+								break;
+							
+							case '1':
+								LEDSet(RED, 1);
+								USARTTransmitBlockingString(redMessage);
+								USARTTransmitBlockingString(onMessage);
+								break;
+								
+							case '2':
+								LEDTogle(RED);
+								USARTTransmitBlockingString(redMessage);
+								USARTTransmitBlockingString(togleMessage);
+								break;
+								
+							default:
+								USARTTransmitBlockingString(errorMessage);
+								break;
+						}
+						break;
+
+					case 'g':
+						switch(interrupt_data){
+							case '0':
+								LEDSet(GREEN, 0);
+								USARTTransmitBlockingString(greenMessage);
+								USARTTransmitBlockingString(offMessage);
+								break;
+							
+							case '1':
+								LEDSet(GREEN, 1);
+								USARTTransmitBlockingString(greenMessage);
+								USARTTransmitBlockingString(onMessage);
+								break;
+								
+							case '2':
+								LEDTogle(GREEN);
+								USARTTransmitBlockingString(greenMessage);
+								USARTTransmitBlockingString(togleMessage);
+								break;
+								
+							default:
+								USARTTransmitBlockingString(errorMessage);
+								break;
+						}
+						break;
+						
+					case 'b':
+						switch(interrupt_data){
+							case '0':
+								LEDSet(BLUE, 0);
+								USARTTransmitBlockingString(blueMessage);
+								USARTTransmitBlockingString(offMessage);
+								break;
+							
+							case '1':
+								LEDSet(BLUE, 1);
+								USARTTransmitBlockingString(blueMessage);
+								USARTTransmitBlockingString(onMessage);
+								break;
+								
+							case '2':
+								LEDTogle(BLUE);
+								USARTTransmitBlockingString(blueMessage);
+								USARTTransmitBlockingString(togleMessage);
+								break;
+								
+							default:
+								USARTTransmitBlockingString(errorMessage);
+								break;
+						}
+						break;
+
+					case 'o':
+						switch(interrupt_data){
+							case '0':
+								LEDSet(ORANGE, 0);
+								USARTTransmitBlockingString(orangeMessage);
+								USARTTransmitBlockingString(offMessage);
+								break;
+							
+							case '1':
+								LEDSet(ORANGE, 1);
+								USARTTransmitBlockingString(orangeMessage);
+								USARTTransmitBlockingString(onMessage);
+								break;
+								
+							case '2':
+								LEDTogle(ORANGE);
+								USARTTransmitBlockingString(orangeMessage);
+								USARTTransmitBlockingString(togleMessage);
+								break;
+								
+							default:
+								USARTTransmitBlockingString(errorMessage);
+								break;
+						}
+						break;
+
+							case '-':
+								switch(interrupt_data){
+									case 'h':
+										break;
+									
+									default:
+									USARTTransmitBlockingString(errorMessage);
+									break;
+								}
+								break;
+
+					default:
+						USARTTransmitBlockingString(errorMessage);
+						break;
+				}
+				
+				lastRead = 0;
+				interrupt_status = 0;
+				interrupt_data = 0;
+				start = 0;
+			}
+		}
+  }
+}
+
+
+/**
+  * @brief Lab part 1 code
+  * @retval None
+  */
+void LABPart1(void){
 	uint8_t rx_data = 0;
 	uint32_t rx_flag = 0;
-
-uint8_t ErrorMesage[] = "\033[1;31mERROR: \033[mUnrecognized command Try 'r' 'g' 'b' 'o'\n\r";
-
+	
+	uint8_t ErrorMesage[] = "\033[1;31mERROR: \033[mUnrecognized command, try 'r' 'g' 'b' 'o'\n\r";
+	
+	
+	
   while (1)
   {
 		rx_flag = (USART3->ISR & (0b1<<5)) >> 5;
@@ -116,25 +355,6 @@ uint8_t ErrorMesage[] = "\033[1;31mERROR: \033[mUnrecognized command Try 'r' 'g'
 		
   }
 }
-
-void USARTTransmitBlocking(uint8_t data){
-
-	while((USART3->ISR & (0b1<<7)) == 0){
-		__NOP();
-	}
-	
-	USART3->TDR = data;
-	
-}
-
-void USARTTransmitBlockingString(uint8_t *data){
-
-	for(uint8_t i = 0; data[i] != 0; i++){
-		USARTTransmitBlocking(data[i]);
-	} 
-	
-}
-
 
 /**
   * @brief Configure the GPIO pins for the LEDs and user button
@@ -181,12 +401,25 @@ void GPIOInit(void){
 	
 }
 
+/**
+  * @brief The state of an LED
+  * @retval None
+	* @param LED: which LED to set
+  * @param value: value to set the LED 
+  */
+void LEDSet(uint16_t LED, uint8_t value){
+	if(value){
+		GPIOC->ODR |= 0b1 << LED;
+	}else{
+		GPIOC->ODR &= ~(0b1 << LED);
+	}
+}
 
 /**
-  * @brief System Clock Configuration
+  * @brief Toggle an led
   * @retval None
+* @param LED: which LED to toggle
   */
-
 void LEDTogle(uint16_t LED){
 	GPIOC->ODR ^= (0b1 << LED);
 }
