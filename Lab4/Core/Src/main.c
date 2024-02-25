@@ -19,7 +19,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-#define LAB_PART 2 // Choose which part of the lab to run (part 1 or 2)
+#define LAB_PART 0 // Choose which part of the lab to run (part 1 or 2)
 
 #define BAUD_RATE 115200
 
@@ -86,9 +86,12 @@ int main(void)
 	USART3->CR1 |= 0b1<<2; // Enable USART3 receiver
 	USART3->CR1 |= 0b1;		 // Enable USART3
 
+	// Run lab part 1
 	if(LAB_PART == 1){
 		LABPart1();
 	}
+	
+	// Run lab part 2
 	if(LAB_PART == 2){
 		LABPart2();
 	}
@@ -101,10 +104,12 @@ int main(void)
   */
 void USARTTransmitBlocking(uint8_t data){
 
+	// Check if the USART transmit register is full
 	while((USART3->ISR & (0b1<<7)) == 0){
 		__NOP();
 	}
 	
+	// Write data to the USART transmit register
 	USART3->TDR = data;
 	
 }
@@ -131,8 +136,13 @@ void USART3_4_IRQHandler(void){
 	interrupt_status = 1;
 }
 
-
+/**
+  * @brief Lab part 2 code
+  * @retval None
+  */
 void LABPart2(void){
+	
+	// Enable the USART3 interrupt
 	NVIC_EnableIRQ(USART3_4_IRQn);
 	NVIC_SetPriority(USART3_4_IRQn, 1);
 
@@ -283,16 +293,17 @@ void LABPart2(void){
 						}
 						break;
 
-							case '-':
-								switch(interrupt_data){
-									case 'h':
-										break;
-									
-									default:
-									USARTTransmitBlockingString(errorMessage);
-									break;
-								}
+					case '-':
+						switch(interrupt_data){
+							case 'h':
+								USARTTransmitBlockingString(helpMessage);
 								break;
+									
+							default:
+								USARTTransmitBlockingString(errorMessage);
+								break;
+							}
+							break;
 
 					default:
 						USARTTransmitBlockingString(errorMessage);
@@ -364,16 +375,12 @@ void LABPart1(void){
   * PC7 = Blue Led
   * PC8 = Orange Led
   * PC9 = Green Led
-  * PA0 = User Button
   *
   */
 void GPIOInit(void){
 	
 	//Enable the peripheral clock for GPIO port C
 	RCC->AHBENR |= 0b1<<19; 
-	
-	//Enable the peripheral clock for GPIO port A
-	RCC->AHBENR |= 0b1<<17;
 	
 	// Set PC6, PC7, PC8, PC9 to general purpose output
 	GPIOC->MODER |= 0b01 << (6 * 2);
@@ -390,14 +397,9 @@ void GPIOInit(void){
 	// Set the speed to slow for GPIO port c
 	GPIOC->OSPEEDR = 0x00000000; 
 	
-	// Set the speed to slow for GPIO PA0
-	GPIOA->OSPEEDR &= ~(0b11); 	
-	
 	// Set the pullup and pulldown to off for GPIO port c
 	GPIOC->PUPDR = 0x00000000; 
 
-	// Set PA0 to pulldown
-	GPIOA->PUPDR |= 0b10;
 	
 }
 
