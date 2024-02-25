@@ -11,3 +11,6 @@
 - [Lab 3](/Lab3/Core/Src/main.c)
   - Part 1: Toggle LEDs using a timer
   - Part 2: Use a timer to dim LEDs using PWM
+- [Lab 4](/Lab4/Core/Src/main.c)
+  - Part 1: Toggle LEDs using a single character command over UART
+  - Part 2: Control LEDs using a double character command over UART
