@@ -21,7 +21,7 @@
 
 #define ADDR 0x69
 #define WHO_AM_I_REG 0x0f
-#define WHO_AM_I 		 0b11010010
+#define WHO_AM_I 		 0b11010011
 
 #define RED 		6
 #define BLUE 		7
