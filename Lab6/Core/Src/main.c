@@ -24,6 +24,8 @@
 #define ORANGE		8
 #define GREEN		9
 
+#define LAB_PART 2
+
 #define THRESHOLD1 50
 #define THRESHOLD2 100
 #define THRESHOLD3 150
@@ -34,7 +36,15 @@ void SystemClock_Config(void);
 void GPIOInit(void);
 void LEDSet(uint16_t LED, uint8_t value);
 void ADCInit(void);
+void DACInit(void);
+void LAB_PART_1(void);
+void LAB_PART_2(void);
+void DACInit(void);
+void DACWrite(uint8_t data);
 uint8_t ADCRead(void);
+
+const uint8_t sine_table[32] = {127,151,175,197,216,232,244,251,254,251,244,
+232,216,197,175,151,127,102,78,56,37,21,9,2,0,2,9,21,37,56,78,102};
 
 /**
   * @brief  The application entry point.
@@ -48,6 +58,23 @@ int main(void)
   SystemClock_Config();
 
 	GPIOInit();
+	
+	if(LAB_PART == 1){
+		LAB_PART_1();
+	}
+
+	if(LAB_PART == 2){
+		LAB_PART_2();
+	}
+	
+}
+
+uint8_t ADCRead(void){
+	return ADC1->DR;
+}
+
+void LAB_PART_1(void){
+
 	ADCInit();
 	
 	
@@ -80,14 +107,24 @@ int main(void)
 			LEDSet(GREEN, 0);
 		}
 		
-
-		
-  }
+  }	
 
 }
 
-uint8_t ADCRead(void){
-	return ADC1->DR;
+void LAB_PART_2(void){
+
+	DACInit();
+	
+	while(1){
+	
+		for(int i = 0; i < 32; i++){
+			DACWrite(sine_table[i]);
+			HAL_Delay(1);
+		}
+		
+	}
+	
+	
 }
 
 void ADCInit(void){
@@ -116,6 +153,22 @@ void ADCInit(void){
 	
 }
 
+void DACInit(void){
+	RCC->APB1ENR |= 0b1 << 29;
+
+	DAC1->CR |= 0b111 << 3; // Set DAC 1 to software trigger
+	DAC1->CR |= 0b1 << 2; // Enable channel 1 trigger
+	DAC1->CR |= 0b1; // Enable DAC channel 1 
+}
+
+void DACWrite(uint8_t data){
+
+	DAC1->DHR8R1 = data; // Write data to DAC
+	DAC1->SWTRIGR |= 0b1; // Trigger DAC
+}
+
+
+
 /**
   * @brief Configure the GPIO pins for the LEDs and user button
   * @retval None
@@ -139,6 +192,11 @@ void GPIOInit(void){
 	
 	// Set PC0 to analog mode
 	GPIOC->MODER |= 0b11;
+	
+	// Set PA4 to analog mode
+	GPIOA->MODER |= 0b11 << (4 * 2);
+	
+	
 	
 	// Set PA0 to general purpose input
 	GPIOA->MODER &= ~(0b11);
