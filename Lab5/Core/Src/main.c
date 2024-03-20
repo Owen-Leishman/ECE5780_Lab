@@ -212,8 +212,9 @@ uint8_t I3G4250DInit(void){
 
 	uint8_t config[] = {CTRL_REG1, ACCEL_CFG};
 	
-	error = I2CWriteBlocking(ADDR, &config[0], 1, 0);
-	error = I2CWriteBlocking(ADDR, &config[1], 1, 1);
+	error |= I2CWriteBlocking(ADDR, &config[0], 1, 0);
+	error |= I2CWriteBlocking(ADDR, &config[1], 1, 1);
+	
 
 
 	
@@ -344,8 +345,12 @@ uint8_t I2CReadBlocking(uint8_t addr, uint8_t *data, uint8_t length){
 		
 		data[i] = I2C2->RXDR;
 		
+		
+		
 	}
 
+	I2C2->CR2 &= ~(length << 16);
+	
 	// Wait for TD flag
 	while((I2C2->ISR & (0b1000000)) == 0){
 		__NOP();
@@ -390,7 +395,7 @@ uint8_t I2CWriteBlocking(uint8_t addr, uint8_t *data, uint8_t length, uint8_t st
 
 	
 	
-	// Wait for TD flag 
+	// Wait for TC flag 
 	while((val & (0b1010000)) == 0){
 		val = I2C2->ISR;
 		if((val & (0b10)) != 0){
