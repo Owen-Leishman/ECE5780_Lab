@@ -18,10 +18,25 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stdio.h"
 
-#define ADDR 0x69
-#define WHO_AM_I_REG 0x0f
-#define WHO_AM_I 		 0b11010010
+#define ADDR 						0x69
+#define WHO_AM_I_REG 		0x0f
+#define CTRL_REG1		 		0x20
+#define ACCEL_CFG				0b00001111
+#define ACCEL_BASE_REG	0xA8
+#define ACCEL_X_L				0x28
+#define ACCEL_X_H				0x29
+#define ACCEL_Y_L				0x2a
+#define	ACCEL_Y_H				0x2b
+
+
+
+#define BAUD_RATE 			115200
+
+#define WHO_AM_I 		 		0b11010011
+
+#define THRESHOLD				200
 
 #define RED 		6
 #define BLUE 		7
@@ -32,6 +47,15 @@
 void SystemClock_Config(void);
 void LEDSet(uint16_t LED, uint8_t value);
 void GPIOInit(void);
+void I2CInit(void);
+void USARTTransmitBlocking(char data);
+void USARTTransmitBlockingString(char *data);
+void USARTInit(void);
+uint8_t I2CWriteBlocking(uint8_t addr, uint8_t *data, uint8_t length, uint8_t stop);
+uint8_t I2CReadBlocking(uint8_t addr, uint8_t *data, uint8_t length);
+uint8_t I3G4250DInit(void);
+uint8_t I3G4250DRead(int16_t* data);
+
 
 /**
   * @brief  The application entry point.
@@ -46,92 +70,345 @@ int main(void)
   SystemClock_Config();
 
 	GPIOInit();
+	USARTInit();
+
+	I2CInit();
+
+	uint8_t error = I3G4250DInit();
+	
+	int16_t accel[2];
+	int32_t average[2];
+	
+	while (1)
+  {
+		
+		if(error){
+			break;
+		}
+		
+		HAL_Delay(100);
+		
+		error = I3G4250DRead(accel);
+		if(error){
+			break;
+		}
+		
+		average[0] += accel[0];
+		average[1] += accel[1];
+		
+		average[0] = average[0] >> 1;
+		average[1] = average[1] >> 1;
+		
+		char debug[100];
+		char message[] = "X = %d, \tY = %d\r\n";
+		
+		sprintf(debug, message, average[0], average[1]);
+		
+		USARTTransmitBlockingString(debug);
+		
+		if(average[0] > THRESHOLD){
+			LEDSet(GREEN, 1);
+			LEDSet(ORANGE, 0);
+		}
+
+		if(average[0] < (-1 * THRESHOLD)){
+			LEDSet(ORANGE, 1);
+			LEDSet(GREEN, 0);
+		}
+		
+		if(average[1] < (-1 * THRESHOLD)){
+			LEDSet(BLUE, 1);
+			LEDSet(RED, 0);
+		}	
+
+		if(average[1] > THRESHOLD){
+			LEDSet(RED, 1);
+			LEDSet(BLUE, 0);
+		}
+		
+		
+
+  }
+	
+	LEDSet(RED, 1);
+	LEDSet(GREEN, 1);
+	LEDSet(BLUE, 1);
+	LEDSet(ORANGE, 1);
+
+}
 
 
+uint8_t I3G4250DRead(int16_t* data){
+	uint8_t error = 0;
+	uint8_t x_l;
+	uint8_t x_h;
+	uint8_t y_l;
+	uint8_t y_h;
+	
+	uint8_t reg = ACCEL_X_L;
+	error = I2CWriteBlocking(ADDR, &reg, 1, 1);
+	error = I2CReadBlocking(ADDR, &x_l, 1);
+
+	reg = ACCEL_X_H;
+	error |= I2CWriteBlocking(ADDR, &reg, 1, 1);
+	error |= I2CReadBlocking(ADDR, &x_h, 1);
+
+	reg = ACCEL_Y_L;
+	error |= I2CWriteBlocking(ADDR, &reg, 1, 1);	
+	error |= I2CReadBlocking(ADDR, &y_l, 1);
+	
+	reg = ACCEL_Y_H;
+	error |= I2CWriteBlocking(ADDR, &reg, 1, 1);
+	error |= I2CReadBlocking(ADDR, &y_h, 1);
+	
+	if(error){
+		return 1;
+	}
+	
+	int16_t xraw = ((x_h) << 8)|(x_l);
+	int16_t yraw = ((y_h) << 8)|(y_l);
+	
+	data[0] = xraw;
+	data[1] = yraw;
+		
+	return 0;
+}
+
+
+uint8_t I3G4250DInit(void){
+
+	uint8_t read_val = 0;
+	uint8_t write_val = WHO_AM_I_REG;
+	
+	uint8_t error = I2CWriteBlocking(ADDR, &write_val, 1, 0); 
+
+	if(error){
+		return 1;
+	}
+
+	error = I2CReadBlocking(ADDR, &read_val, 1);
+
+	if(error){
+		return 1;
+	}
+	
+	if(read_val != WHO_AM_I){
+
+		char debug[100];
+		char message[] = "Error WHO_AM_I incorrect, val = %d\r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);
+		
+		return 1;
+	}else{
+		
+		char debug[100];
+		char message[] = "Device detected \r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);
+	
+	}
+
+
+	uint8_t config[] = {CTRL_REG1, ACCEL_CFG};
+	
+	error = I2CWriteBlocking(ADDR, &config[0], 1, 0);
+	error = I2CWriteBlocking(ADDR, &config[1], 1, 1);
+
+
+	
+	if(error){
+		
+		char debug[100];
+		char message[] = "Error writting configuration \r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);
+		
+		return 1;
+
+	}else{
+	
+		char debug[100];
+		char message[] = "Configuration written \r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);
+		
+	}
+
+
+	uint8_t config_addr = CTRL_REG1;
+	
+	error = I2CWriteBlocking(ADDR, &config_addr, 1, 0);
+
+	if(error){
+		char debug[100];
+		char message[] = "pls work \r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);
+		
+		return 1;
+	}	
+	
+	read_val = 0;
+	error = I2CReadBlocking(ADDR, &read_val, 1);
+	
+	if(read_val != ACCEL_CFG){
+
+		char debug[100];
+		char message[] = "Error config incorrect val = %d\r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);
+		
+		return 1;
+	}else{
+		
+		char debug[100];
+		char message[] = "Configuration checked \r\n";
+		sprintf(debug, message, read_val);
+		USARTTransmitBlockingString(debug);	
+	
+	}		
+	
+	if(error){
+		return 1;
+	}		
+
+
+
+	return 0;
+}
+
+/**
+  * @brief Transmits a single character over USART3
+  * @retval None
+* @param data: the data to be transmitted
+  */
+void USARTTransmitBlocking(char data){
+
+	// Check if the USART transmit register is full
+	while((USART3->ISR & (0b1<<7)) == 0){
+		__NOP();
+	}
+	
+	// Write data to the USART transmit register
+	USART3->TDR = data;
+	
+}
+
+/**
+  * @brief Transmits a array over uart
+  * @retval None
+  * @param *data: pointer to null terminated array to transmit
+  */
+void USARTTransmitBlockingString(char *data){
+
+	for(uint16_t i = 0; data[i] != 0; i++){
+		USARTTransmitBlocking(data[i]);
+	} 
+	
+}
+
+
+void I2CInit(){
 	// Initilize I2C2
 	RCC->APB1ENR |= 0b1 << 22; // Enable I2C2 Clock
 	I2C2->TIMINGR |= (0x1 << 28)|(0x4 << 20)|(0x2 << 16)|(0xF << 8)|0x13;
 	I2C2->CR1 |= 0b1;
-	
-	
+}
+
+
+uint8_t I2CReadBlocking(uint8_t addr, uint8_t *data, uint8_t length){
+
 	// Start a transaction
-	I2C2->CR2 |= ADDR << 1; // Set address to transmit to
-	I2C2->CR2 |= 1 << 16;   // Set the number of bytes to transmit
-	I2C2->CR2 &= ~(0b1 << 10);		// Set the transfer to write
-	I2C2->CR2 |= 0b1 << 13; // Start the transfer
+	
+	I2C2->CR2 |= addr << 1; // Set address to transmit to
+	I2C2->CR2 |= length << 16;   // Set the number of bytes to transmit
+	I2C2->CR2 |= 0b1 << 10;				// Set the transfer to read
+	I2C2->CR2 |= 0b1 << 13; // Start the transfer	
+	
+	I2C2->CR2 &= ~(0b1 << 25);
 	
 	uint32_t val = 0;
 	
-	// Wait for TXIS or NACKF
-	while((val & 0b10010) == 0){
-		val = I2C2->ISR;
-	}
+	for(int i = 0; i < length; i ++){
+		
+		// Wait for RXNE or NACKF
+		while((val & 0b10100) == 0){
+			val = I2C2->ISR;
+		}
 	
-	if((val & 0b10000) != 0){
-		LEDSet(RED, 1);
-	}
-	
-	if((val & 0b10) != 0){
-		LEDSet(GREEN, 1);
+		// Check if NACKF
+		if((val & 0b10000) != 0){
+			return 1;
+		}	
+		
+		data[i] = I2C2->RXDR;
+		
 	}
 
-	
-	
-	// Write the WHO_AM_I address
-	I2C2->TXDR |= WHO_AM_I_REG;
-	//I2C2->CR2 |= 0b1 << 13; // Start the transfer
-	
 	// Wait for TD flag
-	while((I2C2->ISR & (0b1 <<6)) == 0){
+	while((I2C2->ISR & (0b1000000)) == 0){
 		__NOP();
 	}
 	
+	// Send stop condition
+	I2C2->CR2 |= 0b1 << 14;
 	
+	return 0;
+}
+
+uint8_t I2CWriteBlocking(uint8_t addr, uint8_t *data, uint8_t length, uint8_t stop){
 	
 	// Start a transaction
-	I2C2->CR2 |= ADDR << 1; // Set address to transmit to
-	I2C2->CR2 |= 1 << 16;   // Set the number of bytes to transmit
-	I2C2->CR2 |= 0b1 << 10;				// Set the transfer to read
+	I2C2->CR2 |= addr << 1; // Set address to transmit to
+	I2C2->CR2 |= length << 16;   // Set the number of bytes to transmit
+	I2C2->CR2 &= ~(0b1 << 10);		// Set the transfer to write
 	I2C2->CR2 |= 0b1 << 13; // Start the transfer
+	
+	
+	uint32_t val = 0;
+	
 	
 	val = 0;
 	
-	// Wait for RXNE or NACKF
-	while((val & 0b10100) == 0){
+	for(int i = 0; i < length; i++){
+	
+		// Wait for TXIS or NACKF
+		while((val & 0b10010) == 0){
+			val = I2C2->ISR;
+		}
+	
+		// Check if NACKF
+		if((val & 0b10000) != 0){
+			return 1;
+		}	
+		
+		// Transmit data
+		I2C2->TXDR = data[i];
+	
+	}
+
+	
+	
+	// Wait for TD flag 
+	while((val & (0b1010000)) == 0){
 		val = I2C2->ISR;
-	}
-	
-	if((val & 0b10000) != 0){
-		LEDSet(RED, 1);
-	}
-	
-	if((val & 0b100) != 0){
-		LEDSet(GREEN, 1);
-	}
-	
-	// Wait for TD flag
-	while((I2C2->ISR & (0b1 <<6)) == 0){
+		if((val & (0b10)) != 0){
+			//I2C2->ISR |= 0b1;
+		}
 		__NOP();
 	}
 	
-	// Check the value that was read
-	uint8_t read_val = I2C2->RXDR;
+	// Check if NACKF
+	if((val & 0b10000) != 0){
+		return 1;
+	}	
 	
-	// Check the value read from the WHO_AM_I register
-	if(read_val == WHO_AM_I){
-		LEDSet(BLUE, 1);
-	}else{
-		LEDSet(ORANGE, 1);
-	}
-	
-	
-  while (1)
-  {
+	// Send stop condition
+	I2C2->CR2 |= stop << 14;	
 
-  }
-
+	return 0;
 }
-
 
 
 /**
@@ -157,6 +434,20 @@ void GPIOInit(void){
 
 	//Enable the peripheral clock for GPIO port C
 	RCC->AHBENR |= 0b1<<19; 	
+	
+	
+	// Initialize USART GPIOS
+	// TX PC10
+	// RX PC11
+	
+	RCC->APB1ENR |= 0b1<<18; // Enable the clock for USART3
+	
+	GPIOC->MODER |= 0b10<<20; // Set PC10 to alternate function
+	GPIOC->MODER |= 0b10<<22; // Set PC11 to alternate function
+	
+	GPIOC->AFR[1] |= 0b0001<<8;  // Set PC10 alternate function to AF1
+	GPIOC->AFR[1] |= 0b0001<<12; // Set PC11 alternate function to AF1	
+	
 	
 	// Set PC0, PC6, PC7, PC8, PC9 to general purpose output
 	GPIOC->MODER |= 0b01;
@@ -200,6 +491,17 @@ void GPIOInit(void){
 	// Set PA0 to pulldown
 	GPIOA->PUPDR |= 0b10;
 	
+}
+
+void USARTInit(){
+	uint32_t baud_divider = HAL_RCC_GetHCLKFreq()/BAUD_RATE; // Calculate baud rate
+	
+	USART3->BRR = baud_divider; // Set Baud rate
+	
+	USART3->CR1 |= 0b1<<5; // Enable USART3 recieve not empty interrupt
+	USART3->CR1 |= 0b1<<3; // Enable USART3 transmit
+	USART3->CR1 |= 0b1<<2; // Enable USART3 receiver
+	USART3->CR1 |= 0b1;		 // Enable USART3
 }
 
 
